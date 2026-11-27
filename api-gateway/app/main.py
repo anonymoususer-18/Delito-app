@@ -175,7 +175,7 @@ async def ai_generate_image(request: Request, _claims=Depends(require_auth)):
 
 
 @app.get("/api/v1/ai/generated/{filename}")
-async def ai_generated_image(filename: str, _claims=Depends(require_auth)):
+async def ai_generated_image(filename: str):
     async with httpx.AsyncClient(timeout=10) as client:
         try:
             response = await client.get(
