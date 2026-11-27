@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, NavLink, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import {
   Bell, Bot, ChevronRight, Leaf, Menu, Minus, PackageCheck,
