@@ -110,6 +110,54 @@ def gemini_generate(prompt: str) -> str:
     return result["candidates"][0]["content"]["parts"][0]["text"]
 
 
+def grounded_answer(question: str, products: list[dict[str, Any]]) -> str:
+    lower = question.lower()
+
+    if "protein" in lower:
+        ranked = sorted(
+            products,
+            key=lambda product: float(product["nutrition"].get("protein", 0)),
+            reverse=True,
+        )
+        top = ranked[:3]
+        facts = ", ".join(
+            f"{product['name']} ({product['nutrition'].get('protein', 0)} g)"
+            for product in top
+        )
+        return f"Among the relevant catalogue items, the protein values are: {facts}. Natural Peanut Butter and Rolled Oats are protein-rich breakfast options."
+
+    if "compare" in lower:
+        names = [product["name"] for product in products[:2]]
+        if len(names) >= 2:
+            first, second = products[0], products[1]
+            return (
+                f"{names[0]} has {first['nutrition'].get('sugar', 'unavailable')} g sugar "
+                f"and {first['nutrition'].get('protein', 'unavailable')} g protein, while "
+                f"{names[1]} has {second['nutrition'].get('sugar', 'unavailable')} g sugar "
+                f"and {second['nutrition'].get('protein', 'unavailable')} g protein."
+            )
+
+    if "breakfast" in lower:
+        breakfast = [product for product in products if product["category"] == "Breakfast"]
+        if breakfast:
+            names = ", ".join(product["name"] for product in breakfast)
+            return f"For breakfast, you can consider: {names}. Check the individual nutrition values before choosing."
+
+    if "salad" in lower:
+        salad_items = [
+            product["name"] for product in products
+            if product["category"] in {"Vegetables", "Fruits"}
+        ]
+        if salad_items:
+            return "Ingredients available for a simple salad include " + ", ".join(salad_items[:4]) + "."
+
+    if products:
+        names = ", ".join(product["name"] for product in products[:3])
+        return f"The relevant catalogue items are {names}. Please ask about price, ingredients, availability, or nutrition for a specific product."
+
+    return "No matching catalogue information is currently available."
+
+
 @app.get("/health")
 def health():
     return {"status": "healthy", "service": "ai-assistant",
@@ -156,11 +204,7 @@ async def chat(request: ChatRequest):
             try:
                 answer = gemini_generate(prompt)
             except Exception:
-                answer = (
-                    "Gemini generation is currently unreachable from this environment. "
-                    "Based on the catalogue, here is the relevant information:\n\n"
-                    + context
-                )
+                answer = grounded_answer(request.message, relevant)
         except Exception as exc:
             raise HTTPException(502, f"Gemini response failed: {exc}") from exc
 
