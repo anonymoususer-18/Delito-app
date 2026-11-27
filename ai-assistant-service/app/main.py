@@ -22,7 +22,7 @@ app = FastAPI(title="DELITO AI Assistant", version="1.0.0")
 
 
 async def fetch_catalogue() -> list[dict[str, Any]]:
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with httpx.AsyncClient(timeout=20) as client:
         response = await client.get(f"{CATALOGUE_URL}/products")
         response.raise_for_status()
         return response.json()
@@ -87,6 +87,29 @@ def chroma_retrieve(question: str, products: list[dict[str, Any]]) -> list[dict[
         return simple_retrieve(question, products)
 
 
+def gemini_generate(prompt: str) -> str:
+    import json
+    import urllib.request
+
+    url = (
+        "https://generativelanguage.googleapis.com/v1beta/models/"
+        f"{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
+    )
+    payload = json.dumps({
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0.2},
+    }).encode("utf-8")
+    request = urllib.request.Request(
+        url,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=8) as response:
+        result = json.loads(response.read().decode("utf-8"))
+    return result["candidates"][0]["content"]["parts"][0]["text"]
+
+
 @app.get("/health")
 def health():
     return {"status": "healthy", "service": "ai-assistant",
@@ -103,7 +126,7 @@ async def chat(request: ChatRequest):
     except Exception:
         raise HTTPException(503, "Catalogue information is temporarily unavailable")
 
-    relevant = chroma_retrieve(request.message, products)
+    relevant = simple_retrieve(request.message, products)
     context = "\n\n".join([
         f"{p['name']} (category: {p['category']}): price Rs {p['price']} per {p['unit']}; "
         f"available: {'yes' if p['available'] else 'no'}; ingredients: {p['ingredients']}; "
@@ -131,20 +154,13 @@ async def chat(request: ChatRequest):
                 f"Customer question: {request.message}"
             )
             try:
-                from langchain_google_genai import ChatGoogleGenerativeAI
-
-                model = ChatGoogleGenerativeAI(
-                    model=GEMINI_MODEL,
-                    google_api_key=GEMINI_API_KEY,
-                    temperature=0.2,
-                )
-                answer = model.invoke(prompt).content
+                answer = gemini_generate(prompt)
             except Exception:
-                import google.generativeai as genai
-
-                genai.configure(api_key=GEMINI_API_KEY)
-                model = genai.GenerativeModel(GEMINI_MODEL)
-                answer = model.generate_content(prompt).text
+                answer = (
+                    "Gemini generation is currently unreachable from this environment. "
+                    "Based on the catalogue, here is the relevant information:\n\n"
+                    + context
+                )
         except Exception as exc:
             raise HTTPException(502, f"Gemini response failed: {exc}") from exc
 

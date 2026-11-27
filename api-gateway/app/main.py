@@ -52,7 +52,7 @@ async def forward(service: str, path: str, method: str,
                   request: Request, body: Any = None,
                   params: dict[str, Any] | None = None):
     url = SERVICES[service].rstrip("/") + path
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with httpx.AsyncClient(timeout=60) as client:
         try:
             response = await client.request(
                 method,

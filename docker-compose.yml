@@ -38,7 +38,7 @@ services:
     build: ./ai-assistant-service
     environment:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-1.5-flash}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-flash-latest}
       CATALOGUE_SERVICE_URL: http://catalogue-service:8001
       PYTHONUNBUFFERED: "1"
     ports:
