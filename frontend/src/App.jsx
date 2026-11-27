@@ -288,6 +288,29 @@ function Chatbot() {
     setMessage("");
     setTyping(true);
     try {
+      const asksForImage =
+        value.toLowerCase().startsWith("/image") ||
+        value.toLowerCase().includes("generate image") ||
+        value.toLowerCase().includes("create image");
+      if (asksForImage) {
+        const prompt = value
+          .replace(/^\/image\s*/i, "")
+          .replace(/generate image\s*/i, "")
+          .replace(/create image\s*/i, "")
+          .replace(/^:\s*/, "")
+          .trim();
+        const data = await api("/api/v1/ai/image", {
+          method: "POST",
+          body: JSON.stringify({ prompt: prompt || "fresh grocery basket" }),
+        });
+        const imageUrl = `/api/v1/ai/generated/${data.filename}`;
+        setMessages(current => [...current, {
+          role: "assistant",
+          text: `Here is your generated grocery image for: ${data.prompt}`,
+          imageUrl,
+        }]);
+        return;
+      }
       const data = await api("/api/v1/ai/chat", {
         method: "POST",
         body: JSON.stringify({ message: value, session_id: sessionId }),
@@ -306,10 +329,15 @@ function Chatbot() {
         <section className="chat-window">
           <header><span className="chat-logo"><Bot size={20} /></span><div><strong>Ask DELITO AI</strong><small><i /> Online</small></div><button onClick={() => setOpen(false)}><X size={18} /></button></header>
           <div className="chat-messages">
-            {messages.map((item, index) => <div className={`chat-bubble ${item.role}`} key={index}>{item.text}</div>)}
+            {messages.map((item, index) => (
+              <div className={`chat-bubble ${item.role}`} key={index}>
+                {item.text && <span>{item.text}</span>}
+                {item.imageUrl && <img className="chat-generated-image" src={item.imageUrl} alt={item.text || "Generated grocery image"} />}
+              </div>
+            ))}
             {typing && <div className="typing"><i /><i /><i /></div>}
             {messages.length === 1 && <div className="suggestions">
-              {["Which breakfast is high in protein?", "Compare apples and bananas", "Suggest ingredients for a salad"].map(text =>
+              {["Which breakfast is high in protein?", "Compare apples and bananas", "Suggest ingredients for a salad", "Generate image: fresh Indian grocery basket"].map(text =>
                 <button key={text} onClick={() => send(text)}>{text}</button>)}
             </div>}
           </div>

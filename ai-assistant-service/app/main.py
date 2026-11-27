@@ -1,8 +1,13 @@
 import os
+import hashlib
+import html
+from pathlib import Path
+from urllib.parse import quote
 from typing import Any
 
 import httpx
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 
@@ -16,6 +21,16 @@ conversation_history: dict[str, list[dict[str, str]]] = {}
 class ChatRequest(BaseModel):
     message: str
     session_id: str = "default"
+
+
+class ImageRequest(BaseModel):
+    prompt: str
+    width: int = 1024
+    height: int = 1024
+
+
+IMAGE_CACHE = Path(__file__).resolve().parent / "generated-images"
+IMAGE_CACHE.mkdir(parents=True, exist_ok=True)
 
 
 app = FastAPI(title="DELITO AI Assistant", version="1.0.0")
@@ -276,6 +291,83 @@ def grounded_answer(
 def health():
     return {"status": "healthy", "service": "ai-assistant",
             "gemini_configured": bool(GEMINI_API_KEY)}
+
+
+@app.post("/image")
+async def generate_image(request: ImageRequest):
+    prompt = request.prompt.strip()
+    if not prompt:
+        raise HTTPException(400, "Image prompt cannot be empty")
+    if len(prompt) > 500:
+        raise HTTPException(400, "Image prompt is too long")
+
+    width = max(256, min(request.width, 1536))
+    height = max(256, min(request.height, 1536))
+    seed_source = f"{prompt}:{width}:{height}".encode("utf-8")
+    seed = int(hashlib.sha256(seed_source).hexdigest()[:8], 16)
+    svg_filename = f"{hashlib.sha256(seed_source).hexdigest()}.svg"
+    jpg_filename = f"{hashlib.sha256(seed_source).hexdigest()}.jpg"
+    svg_path = IMAGE_CACHE / svg_filename
+    jpg_path = IMAGE_CACHE / jpg_filename
+    cached_path = jpg_path if jpg_path.exists() else svg_path
+
+    if not jpg_path.exists() and not svg_path.exists():
+        enhanced_prompt = (
+            f"Professional premium grocery ecommerce photography, {prompt}, "
+            "fresh, vibrant, natural lighting, clean composition, no text"
+        )
+        provider_url = (
+            f"https://image.pollinations.ai/prompt/{quote(enhanced_prompt)}"
+            f"?width={width}&height={height}&nologo=true&seed={seed}"
+        )
+        try:
+            async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+                response = await client.get(provider_url)
+                response.raise_for_status()
+                content_type = response.headers.get("content-type", "")
+                if "image/" not in content_type or not response.content:
+                    raise HTTPException(502, "Image provider returned an invalid response")
+                jpg_path.write_bytes(response.content)
+                cached_path = jpg_path
+        except HTTPException:
+            pass
+        except Exception as exc:
+            pass
+
+    if not jpg_path.exists() and not svg_path.exists():
+        safe_prompt = html.escape(prompt[:120])
+        svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">
+<rect width="100%" height="100%" fill="#edf8df"/>
+<circle cx="{width*0.22}" cy="{height*0.28}" r="{min(width,height)*0.12}" fill="#ff9f43"/>
+<circle cx="{width*0.72}" cy="{height*0.28}" r="{min(width,height)*0.13}" fill="#ef5b5b"/>
+<circle cx="{width*0.52}" cy="{height*0.54}" r="{min(width,height)*0.16}" fill="#77ba51"/>
+<circle cx="{width*0.28}" cy="{height*0.68}" r="{min(width,height)*0.11}" fill="#c8ef72"/>
+<circle cx="{width*0.75}" cy="{height*0.68}" r="{min(width,height)*0.12}" fill="#ffc857"/>
+<path d="M {width*0.52} {height*0.41} Q {width*0.58} {height*0.30} {width*0.68} {height*0.38} Q {width*0.60} {height*0.44} {width*0.52} {height*0.41}" fill="#123d2b"/>
+<path d="M {width*0.22} {height*0.16} Q {width*0.30} {height*0.10} {width*0.34} {height*0.20}" fill="none" stroke="#123d2b" stroke-width="{min(width,height)*0.018}" stroke-linecap="round"/>
+<rect x="{width*0.11}" y="{height*0.78}" width="{width*0.78}" height="{height*0.12}" rx="{height*0.03}" fill="#ffffff" fill-opacity="0.92"/>
+<text x="{width*0.50}" y="{height*0.85}" text-anchor="middle" fill="#123d2b" font-family="Arial, sans-serif" font-size="{min(width,height)*0.035}" font-weight="700">{safe_prompt}</text>
+</svg>"""
+        svg_path.write_text(svg, encoding="utf-8")
+        cached_path = svg_path
+
+    filename = cached_path.name
+
+    return {
+        "prompt": prompt,
+        "filename": filename,
+        "image_url": f"/generated-images/{filename}",
+        "cached": cached_path.exists(),
+    }
+
+
+@app.get("/generated-images/{filename}")
+def get_generated_image(filename: str):
+    path = IMAGE_CACHE / filename
+    if not path.is_file():
+        raise HTTPException(404, "Generated image not found")
+    media_type = "image/svg+xml" if path.suffix.lower() == ".svg" else "image/jpeg"
+    return FileResponse(path, media_type=media_type)
 
 
 @app.post("/chat")

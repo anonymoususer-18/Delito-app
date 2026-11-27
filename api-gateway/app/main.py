@@ -6,6 +6,7 @@ import httpx
 import jwt
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 
@@ -165,3 +166,25 @@ async def list_notifications(request: Request, _claims=Depends(require_auth)):
 async def ai_chat(request: Request, _claims=Depends(require_auth)):
     body = await request.json()
     return await forward("ai", "/chat", "POST", request, body=body)
+
+
+@app.post("/api/v1/ai/image")
+async def ai_generate_image(request: Request, _claims=Depends(require_auth)):
+    body = await request.json()
+    return await forward("ai", "/image", "POST", request, body=body)
+
+
+@app.get("/api/v1/ai/generated/{filename}")
+async def ai_generated_image(filename: str, _claims=Depends(require_auth)):
+    async with httpx.AsyncClient(timeout=10) as client:
+        try:
+            response = await client.get(
+                f"{SERVICES['ai'].rstrip('/')}/generated-images/{filename}"
+            )
+            response.raise_for_status()
+            return Response(
+                content=response.content,
+                media_type=response.headers.get("content-type", "image/jpeg"),
+            )
+        except httpx.HTTPError as exc:
+            raise HTTPException(503, "Generated image unavailable") from exc
