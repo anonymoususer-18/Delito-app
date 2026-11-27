@@ -394,10 +394,7 @@ async def chat(request: ChatRequest):
     )
 
     if not GEMINI_API_KEY:
-        answer = (
-            "DELITO AI is not connected to Gemini yet. Add GEMINI_API_KEY to `.env`. "
-            "Based on the catalogue, here is the relevant information:\n\n" + context
-        )
+        answer = grounded_answer(request.message, products, history_text)
     else:
         try:
             prompt = (

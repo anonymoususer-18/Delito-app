@@ -1,4 +1,5 @@
 import sqlite3
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -7,7 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 
-DB_PATH = Path(__file__).resolve().parent.parent / "catalogue.db"
+DB_PATH = Path(os.getenv("DATA_DIR", str(Path(__file__).resolve().parent.parent))) / "catalogue.db"
+DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 PRODUCTS = [
     {"name": "Farm Fresh Bananas", "category": "Fruits", "price": 49, "unit": "1 kg", "image": "https://images.unsplash.com/photo-1603833665858-e61d17a86224", "description": "Naturally ripened sweet bananas.", "ingredients": "Banana", "nutrition": {"calories": 89, "protein": 1.1, "fat": 0.3, "carbs": 22.8, "fibre": 2.6, "sugar": 12.2}, "available": True},

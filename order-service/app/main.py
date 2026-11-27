@@ -1,4 +1,5 @@
 import json
+import os
 import sqlite3
 import uuid
 from datetime import datetime, timezone
@@ -9,7 +10,8 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 
-DB_PATH = Path(__file__).resolve().parent.parent / "orders.db"
+DB_PATH = Path(os.getenv("DATA_DIR", str(Path(__file__).resolve().parent.parent))) / "orders.db"
+DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
 class OrderCreate(BaseModel):

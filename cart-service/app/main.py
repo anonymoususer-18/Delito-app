@@ -1,11 +1,13 @@
 import sqlite3
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 
-DB_PATH = Path(__file__).resolve().parent.parent / "cart.db"
+DB_PATH = Path(os.getenv("DATA_DIR", str(Path(__file__).resolve().parent.parent))) / "cart.db"
+DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
 class CartItem(BaseModel):

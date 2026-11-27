@@ -1,4 +1,5 @@
 import sqlite3
+import os
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -7,7 +8,8 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 
-DB_PATH = Path(__file__).resolve().parent.parent / "notifications.db"
+DB_PATH = Path(os.getenv("DATA_DIR", str(Path(__file__).resolve().parent.parent))) / "notifications.db"
+DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
 class NotificationCreate(BaseModel):
