@@ -41,6 +41,30 @@ Each domain service owns a separate SQLite database. The React application only 
 
 See `docker-compose.yml` for service ports and container configuration.
 
+### Service ports
+
+| Service | Port |
+| --- | --- |
+| React frontend | 5173 |
+| API Gateway | 8000 |
+| Catalogue | 8001 |
+| Cart | 8002 |
+| Order | 8003 |
+| Payment | 8004 |
+| Notification | 8005 |
+| DELITO AI | 8006 |
+
+### Useful API routes
+
+- `POST /api/v1/auth/demo-login`
+- `GET /api/v1/catalogue/products`
+- `GET /api/v1/catalogue/products/{id}`
+- `POST /api/v1/cart`
+- `POST /api/v1/orders`
+- `GET /api/v1/orders`
+- `GET /api/v1/notifications`
+- `POST /api/v1/ai/chat`
+
 ## GitHub setup
 
 ```powershell

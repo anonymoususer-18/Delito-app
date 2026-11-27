@@ -1,0 +1,77 @@
+services:
+  catalogue-service:
+    build: ./catalogue-service
+    environment:
+      PYTHONUNBUFFERED: "1"
+    ports:
+      - "8001:8001"
+
+  cart-service:
+    build: ./cart-service
+    environment:
+      PYTHONUNBUFFERED: "1"
+    ports:
+      - "8002:8002"
+
+  order-service:
+    build: ./order-service
+    environment:
+      PYTHONUNBUFFERED: "1"
+    ports:
+      - "8003:8003"
+
+  payment-service:
+    build: ./payment-service
+    environment:
+      PYTHONUNBUFFERED: "1"
+    ports:
+      - "8004:8004"
+
+  notification-service:
+    build: ./notification-service
+    environment:
+      PYTHONUNBUFFERED: "1"
+    ports:
+      - "8005:8005"
+
+  ai-assistant-service:
+    build: ./ai-assistant-service
+    environment:
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-1.5-flash}
+      CATALOGUE_SERVICE_URL: http://catalogue-service:8001
+      PYTHONUNBUFFERED: "1"
+    ports:
+      - "8006:8006"
+    depends_on:
+      - catalogue-service
+
+  api-gateway:
+    build: ./api-gateway
+    environment:
+      JWT_SECRET: ${JWT_SECRET:-delito-development-secret}
+      CATALOGUE_SERVICE_URL: http://catalogue-service:8001
+      CART_SERVICE_URL: http://cart-service:8002
+      ORDER_SERVICE_URL: http://order-service:8003
+      PAYMENT_SERVICE_URL: http://payment-service:8004
+      NOTIFICATION_SERVICE_URL: http://notification-service:8005
+      AI_SERVICE_URL: http://ai-assistant-service:8006
+      PYTHONUNBUFFERED: "1"
+    ports:
+      - "8000:8000"
+    depends_on:
+      - catalogue-service
+      - cart-service
+      - order-service
+      - payment-service
+      - notification-service
+      - ai-assistant-service
+
+  frontend:
+    build: ./frontend
+    environment:
+      VITE_API_URL: http://localhost:8000
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api-gateway
