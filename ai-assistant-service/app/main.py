@@ -110,8 +110,122 @@ def gemini_generate(prompt: str) -> str:
     return result["candidates"][0]["content"]["parts"][0]["text"]
 
 
-def grounded_answer(question: str, products: list[dict[str, Any]]) -> str:
-    lower = question.lower()
+def grounded_answer(
+    question: str,
+    products: list[dict[str, Any]],
+    conversation_context: str = "",
+) -> str:
+    lower = question.lower().replace("protien", "protein")
+
+    def find_named_product():
+        for product in products:
+            if product["name"].lower() in lower:
+                return product
+        if " it " in f" {lower} " or lower.endswith(" it") or "that" in lower:
+            context_lower = conversation_context.lower()
+            mentioned = [
+                (context_lower.find(product["name"].lower()), product)
+                for product in products
+                if product["name"].lower() in context_lower
+            ]
+            if mentioned:
+                _, product = min(mentioned, key=lambda item: item[0])
+                return product
+        for product in products:
+            words = [word for word in product["name"].lower().split() if len(word) > 3]
+            if any(word in lower for word in words):
+                return product
+        return None
+
+    named_product = find_named_product()
+
+    if "protein" in lower:
+        if named_product:
+            return f"{named_product['name']} contains {named_product['nutrition'].get('protein', 'unavailable')} g of protein per 100 g/unit."
+        ranked = sorted(
+            products,
+            key=lambda product: float(product["nutrition"].get("protein", 0)),
+            reverse=True,
+        )
+        top = ranked[:3]
+        return (
+            "High-protein options in the catalogue include "
+            + ", ".join(
+                f"{product['name']} ({product['nutrition'].get('protein', 0)} g protein)"
+                for product in top
+            )
+            + "."
+        )
+
+    if "price" in lower or "cost" in lower or ("how much" in lower and "protein" not in lower and "calorie" not in lower and "sugar" not in lower):
+        if named_product:
+            return (
+                f"{named_product['name']} costs Rs {named_product['price']} per "
+                f"{named_product['unit']}. "
+                f"It is {'available' if named_product['available'] else 'currently unavailable'}."
+            )
+        if products:
+            return "Which product would you like the price for? " + ", ".join(
+                product["name"] for product in products[:5]
+            ) + "."
+
+    if "ingredient" in lower:
+        if named_product:
+            return f"The ingredients in {named_product['name']} are: {named_product['ingredients']}."
+        matching = [product for product in products if "ingredient" in lower or product["name"].lower() in lower]
+        if matching:
+            return "I found these products: " + ", ".join(product["name"] for product in matching[:5]) + "."
+
+    if "available" in lower or "availability" in lower or "in stock" in lower:
+        if named_product:
+            status = "available" if named_product["available"] else "currently unavailable"
+            return f"{named_product['name']} is {status} in the DELITO catalogue."
+
+    if "calorie" in lower:
+        if named_product:
+            return f"{named_product['name']} contains {named_product['nutrition'].get('calories', 'unavailable')} calories per 100 g/unit."
+
+    if "sugar" in lower:
+        if named_product:
+            return f"{named_product['name']} contains {named_product['nutrition'].get('sugar', 'unavailable')} g of sugar per 100 g/unit."
+
+    if "protein" in lower or "high protein" in lower or "high protien" in lower:
+        ranked = sorted(
+            products,
+            key=lambda product: float(product["nutrition"].get("protein", 0)),
+            reverse=True,
+        )
+        top = ranked[:3]
+        return (
+            "High-protein options in the catalogue include "
+            + ", ".join(
+                f"{product['name']} ({product['nutrition'].get('protein', 0)} g protein)"
+                for product in top
+            )
+            + "."
+        )
+
+    if "nutrition" in lower or "nutritional" in lower:
+        if named_product:
+            nutrition = named_product["nutrition"]
+            return (
+                f"{named_product['name']} nutrition per 100 g/unit: "
+                f"{nutrition.get('calories', 'unavailable')} calories, "
+                f"{nutrition.get('protein', 'unavailable')} g protein, "
+                f"{nutrition.get('fat', 'unavailable')} g fat, "
+                f"{nutrition.get('carbs', 'unavailable')} g carbohydrates, "
+                f"{nutrition.get('fibre', 'unavailable')} g fibre, and "
+                f"{nutrition.get('sugar', 'unavailable')} g sugar."
+            )
+
+    if named_product:
+        product = named_product
+        return (
+            f"{product['name']} costs Rs {product['price']} per {product['unit']}. "
+            f"It is {'available' if product['available'] else 'currently unavailable'}, "
+            f"with ingredients: {product['ingredients']}. "
+            f"Protein: {product['nutrition'].get('protein', 'unavailable')} g."
+        )
 
     if "protein" in lower:
         ranked = sorted(
@@ -204,7 +318,7 @@ async def chat(request: ChatRequest):
             try:
                 answer = gemini_generate(prompt)
             except Exception:
-                answer = grounded_answer(request.message, relevant)
+                answer = grounded_answer(request.message, products, history_text)
         except Exception as exc:
             raise HTTPException(502, f"Gemini response failed: {exc}") from exc
 
